@@ -2,20 +2,38 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:youtubeepl/caption_service.dart';
 import 'package:youtubeepl/main.dart';
+import 'dart:developer';
 
-import 'caption_service.dart';
 import 'caption_widget.dart';
 import 'widgets/videoid_form.dart';
 
-class CaptionViewState {
-  Caption currentCaption;
-  CaptionViewState()
-      : currentCaption = Caption("", "00:00:00,000", "00:00:00,000", "");
-}
+class CaptionListWidget extends ConsumerWidget {
+  String videoId;
+  final captionListProvider;
+  CaptionListWidget(this.videoId)
+      : captionListProvider = FutureProvider<Map<String, CaptionTrack>>((ref) {
+          return captionServer.captionTracks(videoId);
+        });
 
-final captionStateEn = StateProvider((ref) => CaptionViewState());
-final captionStateJa = StateProvider((ref) => CaptionViewState());
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    AsyncValue<Map<String, CaptionTrack>> asyncValue =
+        ref.watch(captionListProvider);
+    return asyncValue.when(
+        data: (Map captions) {
+          return Column(children: [
+            CaptionWidget(videoId, "en", captions["en"]),
+            CaptionWidget(videoId, "ja", captions["ja"]),
+          ]);
+        },
+        error: (err, stack) {
+          return Text("$err");
+        },
+        loading: () => const Text("caption list loading"));
+  }
+}
 
 class YoutubePlayBack extends ConsumerWidget {
   List<Widget> playbackWidget() {
@@ -24,13 +42,6 @@ class YoutubePlayBack extends ConsumerWidget {
       const YoutubePlayerIFrame(
         aspectRatio: 16 / 9,
       ),
-    ];
-  }
-
-  List<Widget> captionWidget() {
-    return [
-      CaptionWidget("en"),
-      CaptionWidget("ja"),
     ];
   }
 
@@ -49,6 +60,7 @@ class YoutubePlayBack extends ConsumerWidget {
     return YoutubePlayerControllerProvider(
         controller: _controller,
         child: LayoutBuilder(builder: (context, constraints) {
+          log("playback build");
           if (kIsWeb && constraints.maxWidth > 700) {
             return Row(
               children: [
@@ -57,14 +69,12 @@ class YoutubePlayBack extends ConsumerWidget {
                     child: Column(
                       children: playbackWidget(),
                     )),
-                Column(
-                  children: captionWidget(),
-                )
+                CaptionListWidget(videoId)
               ],
             );
           } else {
             return Column(
-              children: [...playbackWidget(), ...captionWidget()],
+              children: [...playbackWidget(), CaptionListWidget(videoId)],
             );
           }
         }));

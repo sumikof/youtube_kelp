@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtubeepl/caption_service.dart';
-import 'package:youtubeepl/caption_widget.dart';
-import 'package:youtubeepl/widgets/videoid_form.dart';
 import 'package:youtubeepl/youtubeel.dart';
 
 void main() {
@@ -15,7 +13,7 @@ void main() {
 }
 
 final videoIdProvider = StateProvider((ref) {
-  return "_CIHLJHVoN8";
+  return "eV1UNxgJvPI";
 });
 
 class MyApp extends StatelessWidget {
@@ -34,17 +32,14 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends ConsumerWidget {
-  final CaptionService _captionService = CaptionService();
-
+class MyHomePage extends StatelessWidget {
   final String title;
   MyHomePage(this.title);
 
   final _form = GlobalKey<FormState>();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final videoId = ref.watch(videoIdProvider);
+  Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
           title: Text(title),
