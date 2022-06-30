@@ -12,8 +12,30 @@ void main() {
   );
 }
 
-final videoIdProvider = StateProvider((ref) {
-  return "eV1UNxgJvPI";
+final videoIdProvider = StateProvider((ref) => "");
+final captionListProvider = FutureProvider((ref) {
+  final videoId = ref.watch(videoIdProvider);
+  return captionServer.getCaptionTracks(videoId);
+});
+final firstCaptionProvider = FutureProvider<CaptionList>((ref) {
+  AsyncValue<CaptionTracks> captionTracks = ref.watch(captionListProvider);
+  return captionTracks.when(data: (CaptionTracks caps) {
+    return captionServer.downloadCaption(caps["en"]!);
+  }, error: (err, stack) {
+    return [];
+  }, loading: () {
+    return [];
+  });
+});
+final secondCaptionProvider = FutureProvider<CaptionList>((ref) {
+  AsyncValue<CaptionTracks> captionTracks = ref.watch(captionListProvider);
+  return captionTracks.when(data: (CaptionTracks caps) {
+    return captionServer.downloadCaption(caps["ja"]!);
+  }, error: (err, stack) {
+    return [];
+  }, loading: () {
+    return [];
+  });
 });
 
 class MyApp extends StatelessWidget {

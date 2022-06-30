@@ -2,88 +2,27 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const CAPTION_SERVICE_URL = "localhost:3000";
+const CAPTION_SERVICE_URL = "192.168.11.211:3000";
 final DURATION_STRING = RegExp(r'(\w+):(\w+):(\w+),(\w+)');
 const DURATION_STRING_HOUR = 1;
 const DURATION_STRING_MINUTES = 2;
 const DURATION_STRING_SECOND = 3;
 const DURATION_STRING_MILLI_SECOND = 4;
-
-final captionService = CaptionService();
 final captionServer = CaptionServer();
 
-typedef CaptionTable = Map<String, CaptionList>;
-typedef CaptionListTable = Map<String, Map<String, CaptionTrack>>;
+final captionApiService = CaptionApiService();
+typedef Language = String;
+typedef VideoId = String;
+typedef CaptionTable = Map<Language, CaptionList>;
+typedef CaptionTracks = Map<Language, CaptionTrack>;
+typedef CaptionListTable = Map<VideoId, CaptionTracks>;
+typedef CaptionTables = Map<VideoId, CaptionTable>;
 typedef CaptionList = List<Caption>;
-
-Duration parseDurationString(String durationString) {
-  final match = DURATION_STRING.firstMatch(durationString);
-  if (match != null && match.groupCount == 4) {
-    return Duration(
-        hours: int.parse(match.group(DURATION_STRING_HOUR)!),
-        minutes: int.parse(match.group(DURATION_STRING_MINUTES)!),
-        seconds: int.parse(match.group(DURATION_STRING_SECOND)!),
-        milliseconds: int.parse(match.group(DURATION_STRING_MILLI_SECOND)!));
-  } else {
-    throw Exception(
-        "Not Allow Durtion Format Expect => HH:MM:SS.MS ,It is => $durationString");
-  }
-}
-
-class CaptionServer {
-  String videoId;
-  CaptionTable _caption_table;
-  CaptionListTable _captionListTable;
-  CaptionServer()
-      : videoId = "",
-        _caption_table = CaptionTable(),
-        _captionListTable = CaptionListTable() {
-    print("Create CaptionTable");
-  }
-  void checkVideoId(String videoId) {
-    if (this.videoId != videoId) {
-      _caption_table.clear();
-      _captionListTable.clear();
-      this.videoId = videoId;
-    }
-  }
-
-  Future<Map<String, CaptionTrack>> captionTracks(String videoId) async {
-    checkVideoId(videoId);
-    if (_captionListTable.containsKey(videoId)) {
-      return _captionListTable[videoId]!;
-    }
-    _captionListTable[videoId] = await captionService.captionList(videoId);
-
-    if (!_captionListTable[videoId]!.containsKey("en")) {
-      _captionListTable[videoId]!["en"] =
-          CaptionTrack(videoId, "", "en", "asr");
-    }
-    if (!_captionListTable[videoId]!.containsKey("ja")) {
-      _captionListTable[videoId]!["ja"] =
-          CaptionTrack(videoId, "", "ja", "asr");
-    }
-
-    return _captionListTable[videoId]!;
-  }
-
-  Future<CaptionList> updateCaption(
-      String videoId, String language, String trackKind) async {
-    checkVideoId(videoId);
-    if (_caption_table.containsKey(language)) {
-      print("return cash caption");
-      return _caption_table[language]!;
-    }
-    _caption_table[language] =
-        await captionService.download(videoId, language, trackKind);
-    return _caption_table[language]!;
-  }
-}
 
 class CaptionTrack {
   String videoId;
   String captionId;
-  String language;
+  Language language;
   String trackKind;
   CaptionTrack(this.videoId, this.captionId, this.language, this.trackKind);
 }
@@ -103,19 +42,74 @@ class Caption {
   }
 }
 
-class CaptionService {
+Duration parseDurationString(String durationString) {
+  final match = DURATION_STRING.firstMatch(durationString);
+  if (match != null && match.groupCount == 4) {
+    return Duration(
+        hours: int.parse(match.group(DURATION_STRING_HOUR)!),
+        minutes: int.parse(match.group(DURATION_STRING_MINUTES)!),
+        seconds: int.parse(match.group(DURATION_STRING_SECOND)!),
+        milliseconds: int.parse(match.group(DURATION_STRING_MILLI_SECOND)!));
+  } else {
+    throw Exception(
+        "Not Allow Durtion Format Expect => HH:MM:SS.MS ,It is => $durationString");
+  }
+}
+
+class CaptionServer {
+  CaptionTables _caption_table;
+  CaptionListTable _captionTracks;
+  CaptionServer()
+      : _caption_table = CaptionTables(),
+        _captionTracks = CaptionListTable() {
+    print("Create CaptionTable");
+  }
+
+  Future<CaptionTracks> getCaptionTracks(String videoId) async {
+    if (_captionTracks.containsKey(videoId)) {
+      return _captionTracks[videoId]!;
+    }
+    _captionTracks[videoId] = await captionApiService.captionList(videoId);
+    return _captionTracks[videoId]!;
+  }
+
+  Future<CaptionList> downloadCaption(CaptionTrack captionTrack) async {
+    if (_caption_table.containsKey(captionTrack.videoId)) {
+      if (!_caption_table[captionTrack.videoId]!
+          .containsKey(captionTrack.language)) {
+        _caption_table[captionTrack.videoId]![captionTrack.language] =
+            await captionApiService.download(captionTrack.videoId,
+                captionTrack.language, captionTrack.trackKind);
+      }
+    } else {
+      final captionList = await captionApiService.download(
+          captionTrack.videoId, captionTrack.language, captionTrack.trackKind);
+      final captionTable = {captionTrack.language: captionList};
+      _caption_table[captionTrack.videoId] = captionTable;
+    }
+    return _caption_table[captionTrack.videoId]![captionTrack.language]!;
+  }
+}
+
+class CaptionApiService {
   Future<Map> execApi(String api, params) async {
     final response = await http.get(Uri.http(CAPTION_SERVICE_URL, api, params));
     return json.decode(response.body);
   }
 
-  Future<Map<String, CaptionTrack>> captionList(String videoId) async {
+  Future<CaptionTracks> captionList(String videoId) async {
+    if (videoId == "") {
+      return {};
+    }
     final params = {
       "vid": videoId,
     };
     final body = await execApi("captions/list", params);
 
-    Map<String, CaptionTrack> ret = {};
+    CaptionTracks ret = {};
+    ["en", "ja"].forEach((language) {
+      ret[language] = CaptionTrack(videoId, "", language, "asr");
+    });
     body['items'].forEach((item) {
       final language = item["snippet"]["language"];
       final caption_info = CaptionTrack(

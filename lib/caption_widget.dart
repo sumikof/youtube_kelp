@@ -4,6 +4,8 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:youtubeepl/caption_service.dart';
 import 'dart:developer';
 
+import 'package:youtubeepl/main.dart';
+
 class CaptionView extends StatefulWidget {
   CaptionList captionList;
   CaptionView(this.captionList);
@@ -17,21 +19,23 @@ class _CaptionViewState extends State<CaptionView> {
 
   @override
   Widget build(BuildContext context) {
-    final widgetContent = YoutubeValueBuilder(builder: (context, value) {
-      Duration position = value.position;
-      if (position < widget.captionList[captionIndex].start ||
-          widget.captionList[captionIndex].end < position) {
-        final tmpIndex = widget.captionList
-            .indexWhere((caption) => caption.isMatch(value.position));
-        if (tmpIndex != -1) {
-          if (mounted) {
-            captionIndex = tmpIndex;
+    final widgetContent = YoutubeValueBuilder(
+      builder: (context, value) {
+        Duration position = value.position;
+        if (position < widget.captionList[captionIndex].start ||
+            widget.captionList[captionIndex].end < position) {
+          final tmpIndex = widget.captionList
+              .indexWhere((caption) => caption.isMatch(value.position));
+          if (tmpIndex != -1) {
+            if (mounted) {
+              captionIndex = tmpIndex;
+            }
           }
         }
-      }
-      return Text(widget.captionList[captionIndex].caption);
-    });
-
+        return Text(
+            "time => ${value.position} caption => ${widget.captionList[captionIndex].caption}");
+      },
+    );
     return Container(
       height: 50,
       child: widgetContent,
@@ -41,16 +45,13 @@ class _CaptionViewState extends State<CaptionView> {
 }
 
 class CaptionWidget extends ConsumerWidget {
-  final String language;
-  final String videoId;
-  final CaptionTrack captionTrack;
   final captionProvider;
 
-  CaptionWidget(this.videoId, this.language, this.captionTrack)
+  CaptionWidget(captionProvider)
       : captionProvider = FutureProvider<CaptionList>((ref) async {
           log("Create CaptionWidget");
-          return captionServer.updateCaption(
-              videoId, language, captionTrack.trackKind);
+          final captionTrack = await ref.watch(captionProvider);
+          return captionTrack;
         });
 
   @override
